@@ -1,0 +1,27 @@
+# RuneForgedVote Configuration
+
+# The Global Counter for the "Astral Alignment" (Vote Party)
+global-votes: 0
+votes-needed: 50
+
+# Links for the 4 Guardians
+links:
+  1: "https://planetminecraft.com/yourserver" # Ignis
+  2: "https://topg.org/yourserver"            # Cryo
+  3: "https://minecraft-mp.com/yourserver"    # Terra
+  4: "https://vote-link-4.com"                # Aether
+
+# Messages
+messages:
+  vote-received: "&6&l★ &eYou ignited a Star! &7(+1 Stardust)"
+  broadcast: "&b&lORACLE &8» &f%player% &7has aligned the stars! &8(&b%current%/%max%&8)"
+  party-start: "&d&l★ ASTRAL ALIGNMENT ★ &7The stars have aligned!"
+  party-end: "&8&lORACLE &8» &7The cosmos sleeps once more..."
+
+# LOCATIONS (Do not edit manually, use /rfvote setpillar)
+locations:
+  altar: null
+  pillar-1: null
+  pillar-2: null
+  pillar-3: null
+  pillar-4: null

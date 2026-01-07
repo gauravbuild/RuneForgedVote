@@ -1,0 +1,13 @@
+name: RuneForgedVote
+version: '${project.version}'
+main: me.gauravbuilds.runeforgedvote.RuneForgedVote
+api-version: '1.21'
+authors: [ GauravBuilds ]
+depend: [NuVotifier]
+description: Amazing Voting plugin for RuneForged Survival by GauravBuilds legend.
+website: https://gaurav-builds.netlify.app/
+commands:
+  rfvote:
+    description: Admin commands for the Voting System
+    permission: rfvote.admin
+    usage: /rfvote <setpillar|setaltar|fakevote|reload>
