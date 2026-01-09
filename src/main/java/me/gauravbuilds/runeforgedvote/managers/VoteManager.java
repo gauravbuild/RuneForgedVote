@@ -2,14 +2,12 @@ package me.gauravbuilds.runeforgedvote.managers;
 
 import me.gauravbuilds.runeforgedvote.RuneForgedVote;
 import org.bukkit.*;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -32,22 +30,26 @@ public class VoteManager {
         plugin.getConfig().set("global-votes", globalVotes);
         plugin.saveConfig();
 
-        // 2. Handle Player Rewards
+        // 2. Handle Player Logic
         Player player = Bukkit.getPlayer(playerName);
         if (player != null) {
-            giveIndividualRewards(player);
+            giveRewards(player);
 
-            // Visuals for the voter
+            // Visuals
             player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1f, 1f);
+            player.sendTitle(
+                    ChatColor.translateAlternateColorCodes('&', "&6&l★ STAR IGNITED ★"),
+                    ChatColor.translateAlternateColorCodes('&', "&7You received &dStardust"),
+                    10, 40, 10
+            );
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                     plugin.getConfig().getString("messages.vote-received", "&eStar Ignited!")));
 
-            // Notify Pillar Manager to strike lightning!
-            // (We will code this next, but here is where we call it)
+            // Trigger the Pillar Lightning
             plugin.getPillarManager().ignitePillar(serviceName);
         }
 
-        // 3. Broadcast Progress
+        // 3. Broadcast
         String broadcast = plugin.getConfig().getString("messages.broadcast", "&f%player% &7voted!");
         broadcast = broadcast.replace("%player%", playerName)
                 .replace("%current%", String.valueOf(globalVotes))
@@ -60,25 +62,30 @@ public class VoteManager {
         }
     }
 
-    private void giveIndividualRewards(Player player) {
-        // 1. Money (Hook to Vault/Console)
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "eco give " + player.getName() + " 500");
+    private void giveRewards(Player player) {
+        ConsoleCommandSender console = Bukkit.getConsoleSender();
 
-        // 2. Stardust Item (Custom Nether Star)
-        ItemStack stardust = new ItemStack(Material.NETHER_STAR);
-        ItemMeta meta = stardust.getItemMeta();
-        meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', "&d&l✧ Stardust ✧"));
-        List<String> lore = new ArrayList<>();
-        lore.add(ChatColor.GRAY + "A fragment of a fallen star.");
-        lore.add(ChatColor.GRAY + "Used for Rune Forging.");
-        meta.setLore(lore);
-        stardust.setItemMeta(meta);
+        // A. Standard Rewards
+        List<String> commands = plugin.getConfig().getStringList("rewards.per-vote");
+        for (String cmd : commands) {
+            Bukkit.dispatchCommand(console, cmd.replace("%player%", player.getName()));
+        }
 
-        player.getInventory().addItem(stardust);
+        // B. Lucky Chance (5%)
+        if (random.nextInt(100) < 5) {
+            List<String> luckyCmds = plugin.getConfig().getStringList("rewards.lucky-vote");
+            for (String cmd : luckyCmds) {
+                Bukkit.dispatchCommand(console, cmd.replace("%player%", player.getName()));
+            }
+            player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    plugin.getConfig().getString("messages.lucky-trigger", "&dLucky Vote!")));
+            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.5f);
+            player.spawnParticle(Particle.TOTEM_OF_UNDYING, player.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.1);
+        }
     }
 
     private void startAstralAlignment() {
-        // RESET COUNTER
+        // RESET
         globalVotes = 0;
         plugin.getConfig().set("global-votes", 0);
         plugin.saveConfig();
@@ -88,56 +95,55 @@ public class VoteManager {
         Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.party-start")));
         Bukkit.broadcastMessage("");
 
-        // EVENT LOGIC
-        final long originalTime = Bukkit.getWorlds().get(0).getTime(); // Remember old time
+        final long originalTime = Bukkit.getWorlds().get(0).getTime();
 
-        // 1. Set Midnight (Visual)
+        // 1. Set Midnight
         for (World world : Bukkit.getWorlds()) {
             world.setTime(18000);
         }
 
-        // 2. The Meteor Shower (Looping Task)
+        // 2. Meteor Shower Task
         new BukkitRunnable() {
             int ticks = 0;
 
             @Override
             public void run() {
-                if (ticks >= 200) { // Lasts 10 seconds (200 ticks)
-                    // END EVENT
-                    Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.party-end")));
-                    Bukkit.getWorlds().get(0).setTime(originalTime); // Restore time
+                if (ticks >= 200) { // 10 seconds
+                    endParty(originalTime);
                     this.cancel();
                     return;
                 }
-
-                // Every 10 ticks (0.5s), spawn meteors near players
                 if (ticks % 10 == 0) {
                     for (Player p : Bukkit.getOnlinePlayers()) {
                         spawnMeteor(p.getLocation());
                     }
                 }
-
                 ticks += 10;
             }
         }.runTaskTimer(plugin, 0L, 10L);
+    }
 
-        // 3. Give Rewards to EVERYONE
+    private void endParty(long originalTime) {
+        Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.party-end")));
+        Bukkit.getWorlds().get(0).setTime(originalTime);
+
+        // Give Party Rewards
+        ConsoleCommandSender console = Bukkit.getConsoleSender();
+        List<String> partyCmds = plugin.getConfig().getStringList("rewards.party");
+
         for (Player p : Bukkit.getOnlinePlayers()) {
             p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.5f, 0.8f);
-            // Give Crate Key
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "crate give key cosmic " + p.getName() + " 1");
-            p.sendMessage(ChatColor.GREEN + "You received a Cosmic Key!");
+            for (String cmd : partyCmds) {
+                Bukkit.dispatchCommand(console, cmd.replace("%player%", p.getName()));
+            }
         }
     }
 
     private void spawnMeteor(Location center) {
-        // Spawn a firework high above the player
         Location spawnLoc = center.clone().add(random.nextInt(10) - 5, 20, random.nextInt(10) - 5);
-
         Firework fw = center.getWorld().spawn(spawnLoc, Firework.class);
         FireworkMeta meta = fw.getFireworkMeta();
 
-        // Make it look like a star (Ball, White/Purple)
         meta.addEffect(FireworkEffect.builder()
                 .with(FireworkEffect.Type.BALL_LARGE)
                 .withColor(Color.PURPLE, Color.WHITE)
@@ -145,18 +151,11 @@ public class VoteManager {
                 .trail(true)
                 .build());
 
-        meta.setPower(0); // Explodes quickly (or hits ground if we calculated velocity, but this is simple)
+        meta.setPower(0);
         fw.setFireworkMeta(meta);
-
-        // Push it DOWN (Meteor Effect)
         fw.setVelocity(new org.bukkit.util.Vector(0, -2, 0));
     }
 
-    public int getGlobalVotes() {
-        return globalVotes;
-    }
-
-    public int getVotesNeeded() {
-        return VOTES_FOR_PARTY;
-    }
+    public int getGlobalVotes() { return globalVotes; }
+    public int getVotesNeeded() { return VOTES_FOR_PARTY; }
 }

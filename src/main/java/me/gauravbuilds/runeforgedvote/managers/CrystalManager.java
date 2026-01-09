@@ -3,18 +3,28 @@ package me.gauravbuilds.runeforgedvote.managers;
 import me.gauravbuilds.runeforgedvote.RuneForgedVote;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.EulerAngle;
+
+import java.util.Random;
 
 public class CrystalManager {
 
     private final RuneForgedVote plugin;
+    private final Random random = new Random();
+
+    // Entities
     private ArmorStand crystalEntity;
-    private ArmorStand hologramEntity; // The text above it
+    private ArmorStand hologramTitle;  // Top Line
+    private ArmorStand hologramStatus; // Bottom Line
+
+    // Variables
     private double currentAngle = 0.0;
     private Location spawnLoc;
 
@@ -23,7 +33,7 @@ public class CrystalManager {
     }
 
     public void startAnimation() {
-        // Run every tick (1/20th second) for smooth animation
+        // Run every tick for smooth rotation
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -35,105 +45,148 @@ public class CrystalManager {
                 updateCrystal();
             }
         }.runTaskTimer(plugin, 20L, 1L);
+
+        // Run every 5 ticks for "Area Atmosphere" (Performance friendly)
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!plugin.isEnabled()) {
+                    this.cancel();
+                    return;
+                }
+                playAmbientAtmosphere();
+            }
+        }.runTaskTimer(plugin, 20L, 5L);
     }
 
     private void updateCrystal() {
-        // 1. Check if location is set
         if (spawnLoc == null) {
             loadLocation();
-            if (spawnLoc == null) return; // Still null? Wait.
+            if (spawnLoc == null) return;
         }
 
-        // 2. Ensure Entity Exists
         if (crystalEntity == null || !crystalEntity.isValid()) {
             spawnCrystal();
         }
 
-        // 3. Calculate Speed based on Votes
-        // Logic: Base Speed (0.1) + (Votes * 0.08)
-        // 0 Votes = 0.1 (Slow)
-        // 50 Votes = 4.1 (Super Fast)
         int votes = plugin.getVoteManager().getGlobalVotes();
         int maxVotes = plugin.getVoteManager().getVotesNeeded();
 
-        double speed = 0.1 + (votes * 0.08);
-
-        // 4. Rotate
+        // 1. ROTATION LOGIC
+        // Speed increases as votes get closer to 50
+        double speed = 0.15 + (votes * 0.15);
         currentAngle += speed;
         if (currentAngle > 360) currentAngle = 0;
+        crystalEntity.setHeadPose(new EulerAngle(0, Math.toRadians(currentAngle), 0));
 
-        // Convert math angle to EulerAngle (Radians)
-        double radians = Math.toRadians(currentAngle);
-        crystalEntity.setHeadPose(new EulerAngle(0, radians, 0));
+        // 2. CENTER PARTICLES (The Beam)
+        // A gentle spiral going up
+        double y = (System.currentTimeMillis() % 2000) / 1000.0 * 2; // Loops 0 to 2
+        double x = Math.cos(currentAngle * 0.05) * 0.7;
+        double z = Math.sin(currentAngle * 0.05) * 0.7;
+        spawnLoc.getWorld().spawnParticle(Particle.WITCH, spawnLoc.clone().add(x, 1 + y, z), 0, 0, 0, 0, 0);
 
-        // 5. Particles
-        // More votes = More/Different particles
-        if (votes >= (maxVotes - 5)) {
-            // CRITICAL STATE (Purple & Red)
-            spawnLoc.getWorld().spawnParticle(Particle.DRAGON_BREATH, spawnLoc.clone().add(0, 1.5, 0), 2, 0.2, 0.2, 0.2, 0.05);
-            spawnLoc.getWorld().spawnParticle(Particle.FLAME, spawnLoc.clone().add(0, 1.5, 0), 1, 0.1, 0.1, 0.1, 0.05);
-        } else if (votes > 0) {
-            // ACTIVE STATE (Blue/Purple)
-            spawnLoc.getWorld().spawnParticle(Particle.WITCH, spawnLoc.clone().add(0, 1.5, 0), 1, 0.2, 0.2, 0.2, 0);
+        // 3. UPDATE TEXT
+        updateHolograms(votes, maxVotes);
+    }
+
+    private void playAmbientAtmosphere() {
+        if (spawnLoc == null) return;
+        World world = spawnLoc.getWorld();
+
+        // Spawn 3 random "Fireflies" within 10 blocks radius
+        for (int i = 0; i < 3; i++) {
+            double rx = (random.nextDouble() * 20) - 10; // -10 to +10
+            double rz = (random.nextDouble() * 20) - 10;
+            double ry = (random.nextDouble() * 5);       // 0 to 5 high
+
+            Location particleLoc = spawnLoc.clone().add(rx, ry, rz);
+
+            // "End Rod" looks like magic white sparkles
+            world.spawnParticle(Particle.END_ROD, particleLoc, 1, 0, 0, 0, 0);
+
+            // "Dragon Breath" looks like purple void dust (rarely)
+            if (random.nextBoolean()) {
+                world.spawnParticle(Particle.DRAGON_BREATH, particleLoc, 0, 0, 0.05, 0, 0);
+            }
         }
-
-        // 6. Update Hologram Text
-        updateHologram(votes, maxVotes);
     }
 
     private void spawnCrystal() {
-        // Remove old ones first to prevent duplicates
         removeCrystal();
-
         World world = spawnLoc.getWorld();
         if (world == null) return;
 
-        // --- THE CRYSTAL (Armor Stand) ---
+        // --- 1. THE CRYSTAL ITEM ---
         crystalEntity = (ArmorStand) world.spawnEntity(spawnLoc, EntityType.ARMOR_STAND);
         crystalEntity.setVisible(false);
         crystalEntity.setGravity(false);
         crystalEntity.setBasePlate(false);
         crystalEntity.setArms(false);
         crystalEntity.setInvulnerable(true);
-        // Put the item on head (Nether Star or Amethyst)
-        crystalEntity.getEquipment().setHelmet(new ItemStack(Material.AMETHYST_CLUSTER));
 
-        // --- THE HOLOGRAM (Armor Stand above) ---
-        Location holoLoc = spawnLoc.clone().add(0, 0.8, 0); // slightly higher
-        hologramEntity = (ArmorStand) world.spawnEntity(holoLoc, EntityType.ARMOR_STAND);
-        hologramEntity.setVisible(false);
-        hologramEntity.setGravity(false);
-        hologramEntity.setMarker(true); // Tiny hitbox
-        hologramEntity.setCustomNameVisible(true);
-        hologramEntity.setCustomName(ChatColor.DARK_PURPLE + "The Oracle");
+        // Create GLOWING Item
+        ItemStack item = new ItemStack(Material.AMETHYST_CLUSTER);
+        ItemMeta meta = item.getItemMeta();
+        meta.addEnchant(Enchantment.UNBREAKING, 1, true); // Glow effect
+        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);        // Hide "Efficiency I" text
+        item.setItemMeta(meta);
+
+        crystalEntity.getEquipment().setHelmet(item);
+
+        // --- 2. HOLOGRAM (Title) ---
+        Location titleLoc = spawnLoc.clone().add(0, 1.1, 0);
+        hologramTitle = createHologramLine(titleLoc, ChatColor.translateAlternateColorCodes('&', "&d&l✦ THE ORACLE ✦"));
+
+        // --- 3. HOLOGRAM (Status) ---
+        Location statusLoc = spawnLoc.clone().add(0, 0.8, 0);
+        hologramStatus = createHologramLine(statusLoc, ChatColor.GRAY + "Initializing...");
     }
 
-    private void updateHologram(int votes, int max) {
-        if (hologramEntity == null || !hologramEntity.isValid()) return;
+    private ArmorStand createHologramLine(Location loc, String text) {
+        ArmorStand as = (ArmorStand) loc.getWorld().spawnEntity(loc, EntityType.ARMOR_STAND);
+        as.setVisible(false);
+        as.setGravity(false);
+        as.setMarker(true); // Tiny hitbox, players can't click it
+        as.setCustomNameVisible(true);
+        as.setCustomName(text);
+        return as;
+    }
 
-        if (votes >= (max - 5)) {
-            // HYPE MODE
-            hologramEntity.setCustomName(ChatColor.translateAlternateColorCodes('&',
-                    "&c&k||| &4&lALIGNMENT IMMINENT &c&k|||"));
-        } else {
-            // NORMAL MODE
-            hologramEntity.setCustomName(ChatColor.translateAlternateColorCodes('&',
-                    "&d&lTHE ORACLE &7(&b" + votes + "/" + max + "&7)"));
+    private void updateHolograms(int votes, int max) {
+        if (hologramStatus == null || !hologramStatus.isValid()) return;
+
+        // Dynamic Progress Bar
+        String bar = getProgressBar(votes, max);
+        String color = (votes >= max) ? "&a" : "&b"; // Green if ready, Blue if charging
+
+        String text = ChatColor.translateAlternateColorCodes('&',
+                "&7Votes: " + color + votes + "&8/&7" + max + " " + bar);
+
+        hologramStatus.setCustomName(text);
+    }
+
+    private String getProgressBar(int current, int max) {
+        int bars = 10;
+        float percent = (float) current / max;
+        int progress = (int) (bars * percent);
+        if (progress > bars) progress = bars;
+
+        StringBuilder sb = new StringBuilder("&8[");
+        for (int i = 0; i < bars; i++) {
+            if (i < progress) sb.append("&d|"); // Filled (Pink/Purple)
+            else sb.append("&8|");             // Empty (Gray)
         }
+        sb.append("&8]");
+        return sb.toString();
     }
 
     public void removeCrystal() {
-        if (crystalEntity != null) {
-            crystalEntity.remove();
-            crystalEntity = null;
-        }
-        if (hologramEntity != null) {
-            hologramEntity.remove();
-            hologramEntity = null;
-        }
+        if (crystalEntity != null) crystalEntity.remove();
+        if (hologramTitle != null) hologramTitle.remove();
+        if (hologramStatus != null) hologramStatus.remove();
     }
 
-    // Check config for location
     private void loadLocation() {
         FileConfiguration config = plugin.getConfig();
         if (config.contains("locations.altar.world")) {
