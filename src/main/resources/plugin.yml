@@ -6,8 +6,15 @@ authors: [ GauravBuilds ]
 depend: [Votifier]
 description: Amazing Voting plugin for RuneForged Survival by GauravBuilds legend.
 website: https://gaurav-builds.netlify.app/
+
 commands:
   rfvote:
     description: Admin commands for the Voting System
     permission: rfvote.admin
-    usage: /rfvote <setpillar|setaltar|fakevote|reload>
+    usage: |
+      &cInvalid usage. Try:
+      &7/rfvote setpillar <ignis/cryo/terra/aether>
+      &7/rfvote setaltar
+      &7/rfvote interact <player> <guardian>
+      &7/rfvote fakevote <player> <amount>
+      &7/rfvote reload

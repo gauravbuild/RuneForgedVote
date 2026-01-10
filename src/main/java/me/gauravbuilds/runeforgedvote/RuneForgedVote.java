@@ -48,8 +48,8 @@ public class RuneForgedVote extends JavaPlugin {
         // 3. Start Visuals
         crystalManager.startAnimation();
 
-        // 4. Register Commands & Tab Completer
-        // We set the tab completer to "this" because this class implements TabCompleter below
+        // 4. Register Commands
+        // We set THIS class as the executor for "rfvote"
         if (getCommand("rfvote") != null) {
             getCommand("rfvote").setExecutor(this);
             getCommand("rfvote").setTabCompleter(this);
@@ -75,13 +75,13 @@ public class RuneForgedVote extends JavaPlugin {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (!command.getName().equalsIgnoreCase("rfvote")) return true;
-
+        // PERMISSION CHECK
         if (!sender.hasPermission("rfvote.admin")) {
             sender.sendMessage(ChatColor.RED + "Only the Oracle can use this.");
             return true;
         }
 
+        // HELP MENU (No Args)
         if (args.length == 0) {
             sender.sendMessage(ChatColor.GOLD + "=== RuneForgedVote Help ===");
             sender.sendMessage(ChatColor.YELLOW + "/rfvote setpillar <name> " + ChatColor.GRAY + "- Set pillar location");
@@ -111,7 +111,7 @@ public class RuneForgedVote extends JavaPlugin {
             return true;
         }
 
-        // 3. SET PILLAR: /rfvote setpillar <name>
+        // 3. SET PILLAR
         if (sub.equals("setpillar")) {
             if (!(sender instanceof Player)) {
                 sender.sendMessage(ChatColor.RED + "Players only.");
@@ -127,7 +127,7 @@ public class RuneForgedVote extends JavaPlugin {
             return true;
         }
 
-        // 4. INTERACT: /rfvote interact <player> <guardian_name>
+        // 4. INTERACT
         if (sub.equals("interact")) {
             if (args.length < 3) {
                 sender.sendMessage(ChatColor.RED + "Usage: /rfvote interact <player> <guardian>");
@@ -144,11 +144,18 @@ public class RuneForgedVote extends JavaPlugin {
             return true;
         }
 
-        // 5. FAKEVOTE: /rfvote fakevote <player> <amount>
+        // 5. FAKEVOTE
         if (sub.equals("fakevote")) {
-            String pName = (args.length > 1) ? args[1] : "TestPlayer";
+            // Default Values
+            String pName = "TestPlayer";
             int amount = 1;
 
+            // Arg 1: Player Name (Optional)
+            if (args.length > 1) {
+                pName = args[1];
+            }
+
+            // Arg 2: Amount (Optional)
             if (args.length > 2) {
                 try {
                     amount = Integer.parseInt(args[2]);
@@ -159,16 +166,16 @@ public class RuneForgedVote extends JavaPlugin {
 
             sender.sendMessage(ChatColor.YELLOW + "Simulating " + amount + " vote(s) for " + pName + "...");
 
-            // Execute the loop
+            // EXECUTE LOOP
             for (int i = 0; i < amount; i++) {
                 voteManager.handleVote(pName, "FakeVote");
             }
 
-            sender.sendMessage(ChatColor.GREEN + "Simulation complete. Total Votes: " + voteManager.getGlobalVotes());
+            sender.sendMessage(ChatColor.GREEN + "Simulation complete. Global Votes: " + voteManager.getGlobalVotes());
             return true;
         }
 
-        sender.sendMessage(ChatColor.RED + "Unknown command.");
+        sender.sendMessage(ChatColor.RED + "Unknown command. Type /rfvote for help.");
         return true;
     }
 
@@ -183,7 +190,7 @@ public class RuneForgedVote extends JavaPlugin {
         List<String> completions = new ArrayList<>();
         List<String> suggestions = new ArrayList<>();
 
-        // Argument 1: Subcommands
+        // ARG 1: Subcommands
         if (args.length == 1) {
             suggestions.add("interact");
             suggestions.add("setpillar");
@@ -197,29 +204,27 @@ public class RuneForgedVote extends JavaPlugin {
 
         String sub = args[0].toLowerCase();
 
-        // Argument 2:
-        // setpillar -> <guardian>
-        // interact -> <player>
-        // fakevote -> <player>
+        // ARG 2: Player or Guardian
         if (args.length == 2) {
             if (sub.equals("setpillar")) {
                 suggestions.addAll(Arrays.asList("ignis", "cryo", "terra", "aether"));
-            } else if (sub.equals("interact") || sub.equals("fakevote")) {
-                return null; // Return null to show online players automatically
+            }
+            else if (sub.equals("interact") || sub.equals("fakevote")) {
+                return null; // Returning null makes Spigot suggest online players automatically
             }
             StringUtil.copyPartialMatches(args[1], suggestions, completions);
             Collections.sort(completions);
             return completions;
         }
 
-        // Argument 3:
-        // interact -> <guardian>
-        // fakevote -> <amount>
+        // ARG 3: Guardian or Amount
         if (args.length == 3) {
             if (sub.equals("interact")) {
                 suggestions.addAll(Arrays.asList("ignis", "cryo", "terra", "aether"));
-            } else if (sub.equals("fakevote")) {
-                suggestions.addAll(Arrays.asList("1", "5", "10", "32", "50", "64"));
+            }
+            else if (sub.equals("fakevote")) {
+                // Here are the numbers you requested!
+                suggestions.addAll(Arrays.asList("1", "2", "4", "8", "16", "32", "64"));
             }
             StringUtil.copyPartialMatches(args[2], suggestions, completions);
             Collections.sort(completions);
@@ -237,7 +242,6 @@ public class RuneForgedVote extends JavaPlugin {
         boolean demoMode = getConfig().getBoolean("demo-mode", true);
 
         if (demoMode) {
-            // Check Cooldown
             long lastVote = getConfig().getLong("data." + player.getUniqueId() + "." + guardianName, 0);
             long currentTime = System.currentTimeMillis();
             long cooldownTime = TimeUnit.HOURS.toMillis(24);
@@ -254,16 +258,12 @@ public class RuneForgedVote extends JavaPlugin {
                 return;
             }
 
-            // Capitalize first letter
             String displayName = guardianName.substring(0, 1).toUpperCase() + guardianName.substring(1);
             getVoteManager().handleVote(player.getName(), displayName);
-
-            // Save Cooldown
             getConfig().set("data." + player.getUniqueId() + "." + guardianName, currentTime);
             saveConfig();
 
         } else {
-            // Send Link
             String link = getConfig().getString("links.1", "https://example.com");
             String msg = getConfig().getString("messages.link-sent", "&eGo vote: %link%").replace("%link%", link);
             TextComponent component = new TextComponent(ChatColor.translateAlternateColorCodes('&', msg));
