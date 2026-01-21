@@ -1,7 +1,7 @@
 # RuneForgedVote Configuration
 
 # --- DEMO / SHOWCASE MODE ---
-# true = Click NPC to simulate vote (Instant Reward).
+# true = Click NPC to simulate vote (Instant Reward + Magic).
 # false = Click NPC to get link (Real Voting).
 demo-mode: true
 
@@ -15,26 +15,61 @@ votes-needed: 50
 rewards:
   per-vote:
     - "eco give %player% 500"
-    - "rune givecatalyst %player% 1" # <--- CONNECTS TO RUNEFORGEDRUNES
+    - "rune givecatalyst %player% 1" # Connects to RuneForgedRunes
 
   # 5% Chance to run these EXTRA commands
   lucky-vote:
     - "rune givecatalyst %player% 2"
     - "broadcast &6&lLUCKY! &e%player% received &dDouble Stardust&e!"
 
-  # Runs for EVERYONE when votes hit 50
+  # Runs for EVERYONE when the party ends
   party:
     - "crate give key cosmic %player% 1"
     - "eco give %player% 1000"
 
-# Links for the 4 Guardians
+# --- LINKS ---
+# These specific names are REQUIRED for the "Click to Vote" menu to work.
 links:
-  1: "https://planetminecraft.com/yourserver"
-  2: "https://topg.org/yourserver"
-  3: "https://minecraft-mp.com/yourserver"
-  4: "https://vote-link-4.com"
+  ignis: "https://planetminecraft.com/yourserver"
+  cryo: "https://topg.org/yourserver"
+  terra: "https://minecraft-mp.com/yourserver"
+  aether: "https://yourserver.com/vote/4"
+  # Fallback ID for generic commands
+  1: "https://yourserver.com/vote"
 
-# Messages
+# --- FACTION BLESSINGS (The "Event" Logic) ---
+# When 50 votes are reached, the Guardian with the most votes wins.
+# The winner grants their effect to the ENTIRE server.
+blessings:
+  ignis:
+    effect: INCREASE_DAMAGE # Strength
+    amplifier: 0 # Level 1
+    duration: 600 # 10 Minutes (in seconds)
+    description: "Strength I"
+    message: "&c&l🔥 IGNIS PREVAILS! &7The Spirit of Fire grants &cStrength&7 to all!"
+
+  cryo:
+    effect: SPEED
+    amplifier: 1 # Speed 2
+    duration: 600
+    description: "Speed II"
+    message: "&b&l❄️ CRYO PREVAILS! &7The Spirit of Ice grants &bSpeed II&7 to all!"
+
+  terra:
+    effect: FAST_DIGGING # Haste
+    amplifier: 1 # Haste 2
+    duration: 600
+    description: "Haste II"
+    message: "&a&l🌿 TERRA PREVAILS! &7The Spirit of Nature grants &aHaste II&7 to all!"
+
+  aether:
+    effect: REGENERATION
+    amplifier: 0 # Regen 1
+    duration: 600
+    description: "Regeneration I"
+    message: "&d&l🔮 AETHER PREVAILS! &7The Spirit of Void grants &dRegeneration&7 to all!"
+
+# --- MESSAGES ---
 messages:
   vote-received: "&6&l★ &eYou ignited a Star! &7(+1 Stardust)"
   lucky-trigger: "&d&l✧ CRITICAL VOTE! ✧ &7The stars smiled upon you!"
@@ -48,13 +83,18 @@ messages:
   party-start: "&d&l★ ASTRAL ALIGNMENT ★ &7The stars have aligned!"
   party-end: "&8&lORACLE &8» &7The cosmos sleeps once more..."
 
-# LOCATIONS (Do not edit manually)
+  # Silence Event
+  chat-muted: "&c&lSILENCE! &7The Stars are aligning... &8(Chat Muted)"
+  chat-unmuted: "&a&lTHE RITUAL ENDS. &7You may speak again."
+
+# --- LOCATIONS ---
+# Do not edit manually. Use /rfvote setpillar, setaltar, setmeteor
 locations:
   altar: null
-  pillar-1: null
-  pillar-2: null
-  pillar-3: null
-  pillar-4: null
+  pillar-ignis: null
+  pillar-cryo: null
+  pillar-terra: null
+  pillar-aether: null
 
-# Internal Data
+# Internal Data (Cooldowns)
 data: {}
