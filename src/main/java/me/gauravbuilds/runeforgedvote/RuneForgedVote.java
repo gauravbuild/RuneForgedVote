@@ -1,10 +1,12 @@
 package me.gauravbuilds.runeforgedvote;
 
 import me.gauravbuilds.runeforgedvote.listeners.ChatListener;
+import me.gauravbuilds.runeforgedvote.listeners.GeodeListener;
 import me.gauravbuilds.runeforgedvote.listeners.VoteListener;
 import me.gauravbuilds.runeforgedvote.listeners.NpcListener;
 import me.gauravbuilds.runeforgedvote.managers.BossBarManager;
 import me.gauravbuilds.runeforgedvote.managers.CrystalManager;
+import me.gauravbuilds.runeforgedvote.managers.GeodeManager;
 import me.gauravbuilds.runeforgedvote.managers.MeteorManager;
 import me.gauravbuilds.runeforgedvote.managers.PillarManager;
 import me.gauravbuilds.runeforgedvote.managers.VoteManager;
@@ -35,6 +37,7 @@ public class RuneForgedVote extends JavaPlugin {
     private PillarManager pillarManager;
     private BossBarManager bossBarManager;
     private MeteorManager meteorManager;
+    private GeodeManager geodeManager;
 
     @Override
     public void onEnable() {
@@ -44,6 +47,7 @@ public class RuneForgedVote extends JavaPlugin {
         this.pillarManager = new PillarManager(this);
         this.meteorManager = new MeteorManager(this);
         this.bossBarManager = new BossBarManager(this);
+        this.geodeManager = new GeodeManager(this);
         this.voteManager = new VoteManager(this);
         this.crystalManager = new CrystalManager(this);
 
@@ -51,7 +55,8 @@ public class RuneForgedVote extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new VoteListener(this), this);
         getServer().getPluginManager().registerEvents(new NpcListener(this), this);
         getServer().getPluginManager().registerEvents(bossBarManager, this);
-        getServer().getPluginManager().registerEvents(new ChatListener(this), this); // <--- REGISTER CHAT LISTENER
+        getServer().getPluginManager().registerEvents(new ChatListener(this), this);
+        getServer().getPluginManager().registerEvents(new GeodeListener(this), this);
 
         // 3. Start Visuals
         crystalManager.startAnimation();
@@ -69,6 +74,7 @@ public class RuneForgedVote extends JavaPlugin {
     public void onDisable() {
         if (crystalManager != null) crystalManager.removeCrystal();
         if (bossBarManager != null) bossBarManager.removeBar();
+        if (geodeManager != null) geodeManager.cleanupGeodes();
     }
 
     public VoteManager getVoteManager() { return voteManager; }
@@ -76,14 +82,11 @@ public class RuneForgedVote extends JavaPlugin {
     public PillarManager getPillarManager() { return pillarManager; }
     public BossBarManager getBossBarManager() { return bossBarManager; }
     public MeteorManager getMeteorManager() { return meteorManager; }
-
-    // ... (Your existing Command Logic / onCommand & onTabComplete remains exactly the same) ...
-    // ... (Paste the onCommand logic from previous response if needed, otherwise it's fine) ...
+    public GeodeManager getGeodeManager() { return geodeManager; }
 
     // ==========================================
     //              COMMAND LOGIC
     // ==========================================
-
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!sender.hasPermission("rfvote.admin")) {
@@ -94,7 +97,8 @@ public class RuneForgedVote extends JavaPlugin {
         if (args.length == 0) {
             sender.sendMessage(ChatColor.GOLD + "=== RuneForgedVote Help ===");
             sender.sendMessage(ChatColor.YELLOW + "/rfvote setpillar <name>");
-            sender.sendMessage(ChatColor.YELLOW + "/rfvote setmeteor <1-10>");
+            sender.sendMessage(ChatColor.YELLOW + "/rfvote setmeteor <number>");
+            sender.sendMessage(ChatColor.YELLOW + "/rfvote setgeode <number> " + ChatColor.AQUA + "(NEW)");
             sender.sendMessage(ChatColor.YELLOW + "/rfvote setaltar");
             sender.sendMessage(ChatColor.YELLOW + "/rfvote fakevote <player> <amount>");
             sender.sendMessage(ChatColor.YELLOW + "/rfvote reload");
@@ -103,15 +107,14 @@ public class RuneForgedVote extends JavaPlugin {
 
         String sub = args[0].toLowerCase();
 
-        // RELOAD
         if (sub.equals("reload")) {
             reloadConfig();
             meteorManager.loadLocations();
+            geodeManager.loadGeodeLocations(); // Reload geodes too
             sender.sendMessage(ChatColor.GREEN + "Config reloaded.");
             return true;
         }
 
-        // SET ALTAR
         if (sub.equals("setaltar")) {
             if (!(sender instanceof Player)) return true;
             saveLocation("locations.altar", ((Player) sender).getLocation());
@@ -119,17 +122,42 @@ public class RuneForgedVote extends JavaPlugin {
             return true;
         }
 
-        // SET METEOR
+        // SET METEOR (Visuals Only)
         if (sub.equals("setmeteor")) {
             if (!(sender instanceof Player)) return true;
-            if (args.length < 2) return true;
-            saveLocation("locations.meteor-" + args[1], ((Player) sender).getLocation());
-            sender.sendMessage(ChatColor.GREEN + "Meteor Impact Zone #" + args[1] + " set!");
-            meteorManager.loadLocations();
+            if (args.length < 2) {
+                sender.sendMessage(ChatColor.RED + "Usage: /rfvote setmeteor <number>");
+                return true;
+            }
+            try {
+                int id = Integer.parseInt(args[1]);
+                saveLocation("locations.meteor-" + id, ((Player) sender).getLocation());
+                sender.sendMessage(ChatColor.GREEN + "Meteor Visual Zone #" + id + " set!");
+                meteorManager.loadLocations();
+            } catch (NumberFormatException e) {
+                sender.sendMessage(ChatColor.RED + "Invalid number.");
+            }
             return true;
         }
 
-        // SET PILLAR
+        // SET GEODE (Physical Mining Spots)
+        if (sub.equals("setgeode")) {
+            if (!(sender instanceof Player)) return true;
+            if (args.length < 2) {
+                sender.sendMessage(ChatColor.RED + "Usage: /rfvote setgeode <number>");
+                return true;
+            }
+            try {
+                int id = Integer.parseInt(args[1]);
+                saveLocation("locations.geode-" + id, ((Player) sender).getLocation());
+                sender.sendMessage(ChatColor.GREEN + "Geode Mining Spot #" + id + " set!");
+                geodeManager.loadGeodeLocations();
+            } catch (NumberFormatException e) {
+                sender.sendMessage(ChatColor.RED + "Invalid number.");
+            }
+            return true;
+        }
+
         if (sub.equals("setpillar")) {
             if (!(sender instanceof Player)) return true;
             if (args.length < 2) return true;
@@ -139,7 +167,6 @@ public class RuneForgedVote extends JavaPlugin {
             return true;
         }
 
-        // INTERACT
         if (sub.equals("interact")) {
             if (args.length < 3) return true;
             Player target = Bukkit.getPlayer(args[1]);
@@ -148,7 +175,6 @@ public class RuneForgedVote extends JavaPlugin {
             return true;
         }
 
-        // FAKEVOTE
         if (sub.equals("fakevote")) {
             String pName = (args.length > 1) ? args[1] : "TestPlayer";
             int amount = 1;
@@ -159,13 +185,8 @@ public class RuneForgedVote extends JavaPlugin {
             for (int i = 0; i < amount; i++) voteManager.handleVote(pName, "FakeVote");
             return true;
         }
-
         return true;
     }
-
-    // ==========================================
-    //            TAB COMPLETION LOGIC
-    // ==========================================
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
@@ -174,17 +195,21 @@ public class RuneForgedVote extends JavaPlugin {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            suggestions.addAll(Arrays.asList("interact", "setpillar", "setaltar", "setmeteor", "reload", "fakevote"));
+            suggestions.addAll(Arrays.asList("interact", "setpillar", "setaltar", "setmeteor", "setgeode", "reload", "fakevote"));
             StringUtil.copyPartialMatches(args[0], suggestions, completions);
             Collections.sort(completions);
             return completions;
         }
 
         String sub = args[0].toLowerCase();
+
         if (args.length == 2) {
             if (sub.equals("setpillar")) suggestions.addAll(Arrays.asList("ignis", "cryo", "terra", "aether"));
-            else if (sub.equals("setmeteor")) suggestions.addAll(Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"));
+            else if (sub.equals("setmeteor") || sub.equals("setgeode")) {
+                for (int i = 1; i <= 20; i++) suggestions.add(String.valueOf(i));
+            }
             else if (sub.equals("interact") || sub.equals("fakevote")) return null;
+
             StringUtil.copyPartialMatches(args[1], suggestions, completions);
             Collections.sort(completions);
             return completions;
@@ -197,7 +222,6 @@ public class RuneForgedVote extends JavaPlugin {
             Collections.sort(completions);
             return completions;
         }
-
         return Collections.emptyList();
     }
 

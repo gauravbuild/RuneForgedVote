@@ -3,7 +3,8 @@
 # --- DEMO / SHOWCASE MODE ---
 # true = Click NPC to simulate vote (Instant Reward + Magic).
 # false = Click NPC to get link (Real Voting).
-demo-mode: true
+# [TESTING MODE] Set to FALSE so we can click the NPC and see the links!
+demo-mode: false
 
 # The Global Counter for the "Astral Alignment" (Vote Party)
 global-votes: 0
@@ -27,15 +28,16 @@ rewards:
     - "crate give key cosmic %player% 1"
     - "eco give %player% 1000"
 
-# --- LINKS ---
-# These specific names are REQUIRED for the "Click to Vote" menu to work.
+# --- LINKS (TEMPORARY TESTING) ---
+# These are the 4 temporary links for Ignis, Cryo, Terra, Aether.
+# REMINDER: Remove these before packing up for BuiltByBit!
 links:
-  ignis: "https://planetminecraft.com/yourserver"
-  cryo: "https://topg.org/yourserver"
-  terra: "https://minecraft-mp.com/yourserver"
-  aether: "https://yourserver.com/vote/4"
-  # Fallback ID for generic commands
-  1: "https://yourserver.com/vote"
+  ignis: "https://www.google.com/search?q=vote+ignis"   # Temp Link 1
+  cryo: "https://www.google.com/search?q=vote+cryo"     # Temp Link 2
+  terra: "https://www.google.com/search?q=vote+terra"   # Temp Link 3
+  aether: "https://www.google.com/search?q=vote+aether" # Temp Link 4
+  # Fallback
+  1: "https://www.google.com"
 
 # --- FACTION BLESSINGS (The "Event" Logic) ---
 # When 50 votes are reached, the Guardian with the most votes wins.

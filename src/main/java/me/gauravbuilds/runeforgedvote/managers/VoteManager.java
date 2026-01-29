@@ -32,74 +32,59 @@ public class VoteManager {
         this.plugin = plugin;
         this.globalVotes = plugin.getConfig().getInt("global-votes", 0);
         this.VOTES_FOR_PARTY = plugin.getConfig().getInt("votes-needed", 50);
-
-        // Init Counts
         resetFactions();
     }
 
     public void handleVote(String playerName, String serviceName) {
-        // 1. Update Global
         globalVotes++;
         plugin.getConfig().set("global-votes", globalVotes);
         plugin.saveConfig();
 
-        // 2. Track Faction
         String guardian = identifyGuardian(serviceName);
         factionVotes.put(guardian, factionVotes.getOrDefault(guardian, 0) + 1);
 
-        // 3. Update Boss Bar
         if (plugin.getBossBarManager() != null) {
             plugin.getBossBarManager().updateBar(globalVotes, VOTES_FOR_PARTY);
         }
 
-        // 4. Rewards & Visuals
         Player player = Bukkit.getPlayer(playerName);
         if (player != null) {
             giveRewards(player);
-            // Strike the specific Pillar
             plugin.getPillarManager().ignitePillar(guardian);
-
             player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1f, 1f);
             player.sendTitle(ChatColor.GOLD + "★ STAR IGNITED ★", ChatColor.GRAY + "You supported " + capitalize(guardian), 10, 40, 10);
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.vote-received")));
         }
 
-        // 5. Broadcast
         String broadcast = plugin.getConfig().getString("messages.broadcast")
                 .replace("%player%", playerName)
                 .replace("%current%", String.valueOf(globalVotes))
                 .replace("%max%", String.valueOf(VOTES_FOR_PARTY));
         Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', broadcast));
 
-        // 6. Check for Party
         if (globalVotes >= VOTES_FOR_PARTY) {
             startAstralAlignment();
         }
     }
 
     private void startAstralAlignment() {
-        // Reset Global Counter immediately
         globalVotes = 0;
         plugin.getConfig().set("global-votes", 0);
         plugin.saveConfig();
         if (plugin.getBossBarManager() != null) plugin.getBossBarManager().updateBar(0, VOTES_FOR_PARTY);
 
-        // MUTE CHAT
         isChatMuted = true;
         Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.chat-muted")));
 
-        // TRIGGER VISUALS
         plugin.getMeteorManager().startSequence();
 
-        // SEND THE INTERACTIVE VOTE MENU
         new BukkitRunnable() {
             @Override
             public void run() {
                 sendVoteStatusMenu();
             }
-        }.runTaskLater(plugin, 40L); // 2 seconds delay so they see the meteors start first
+        }.runTaskLater(plugin, 40L);
 
-        // END PARTY AFTER 15 SECONDS
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -109,18 +94,15 @@ public class VoteManager {
     }
 
     private void sendVoteStatusMenu() {
-        // Send to everyone
         for (Player p : Bukkit.getOnlinePlayers()) {
             p.sendMessage("");
             p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&6&l★ THE STARS ARE ALIGNING! ★"));
             p.sendMessage(ChatColor.GRAY + "The guardians are fighting for dominance...");
             p.sendMessage("");
-
             sendGuardianLine(p, "ignis", "&c🔥 Ignis", ChatColor.RED);
             sendGuardianLine(p, "cryo", "&b❄️ Cryo", ChatColor.AQUA);
             sendGuardianLine(p, "terra", "&a🌿 Terra", ChatColor.GREEN);
             sendGuardianLine(p, "aether", "&d🔮 Aether", ChatColor.LIGHT_PURPLE);
-
             p.sendMessage("");
             p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&e&lCLICK TO VOTE &7to change the fate!"));
             p.sendMessage("");
@@ -135,7 +117,6 @@ public class VoteManager {
         TextComponent message = new TextComponent(ChatColor.translateAlternateColorCodes('&',
                 displayName + " &8[" + color + power + "&8] &7- &f" + votes + " Votes "));
 
-        // The [VOTE] Button
         TextComponent button = new TextComponent("[VOTE]");
         button.setColor(net.md_5.bungee.api.ChatColor.GOLD);
         button.setBold(true);
@@ -150,36 +131,25 @@ public class VoteManager {
         isChatMuted = false;
         Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.chat-unmuted")));
 
-        // Determine Winner
         String winner = getWinningFaction();
         applyBlessing(winner);
 
-        // Give Rewards
-        ConsoleCommandSender console = Bukkit.getConsoleSender();
-        List<String> partyCmds = plugin.getConfig().getStringList("rewards.party");
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.5f, 0.8f);
-            for (String cmd : partyCmds) {
-                Bukkit.dispatchCommand(console, cmd.replace("%player%", p.getName()));
-            }
-        }
+        // --- NEW GEODE LOGIC ---
+        Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', "&6&lTHE STARS HAVE LANDED! &e&lHARVEST THE GEODES QUICKLY!"));
+        plugin.getGeodeManager().spawnGeodes(winner);
 
-        // Reset Factions for next round
         resetFactions();
     }
 
     private String getWinningFaction() {
-        String winner = "aether"; // Default
+        String winner = "aether";
         int max = -1;
-
-        // Iterate to find highest
         for (Map.Entry<String, Integer> entry : factionVotes.entrySet()) {
             if (entry.getValue() > max) {
                 max = entry.getValue();
                 winner = entry.getKey();
             }
         }
-        // If it's a tie or 0, Aether (Void) usually wins logically, or random.
         return winner;
     }
 
@@ -220,7 +190,7 @@ public class VoteManager {
         if (input.contains("cryo")) return "cryo";
         if (input.contains("terra")) return "terra";
         if (input.contains("aether")) return "aether";
-        return "aether"; // Default
+        return "aether";
     }
 
     private void resetFactions() {
