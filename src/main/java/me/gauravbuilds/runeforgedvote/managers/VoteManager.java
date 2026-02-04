@@ -12,10 +12,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
 public class VoteManager {
 
@@ -26,7 +23,9 @@ public class VoteManager {
 
     // Faction Tracking
     private final Map<String, Integer> factionVotes = new HashMap<>();
+    private final Set<UUID> hasVotedInEvent = new HashSet<>(); // Track players who voted in the mini-event
     private boolean isChatMuted = false;
+    private boolean isEventActive = false; // Is the mini-vote active?
 
     public VoteManager(RuneForgedVote plugin) {
         this.plugin = plugin;
@@ -40,8 +39,13 @@ public class VoteManager {
         plugin.getConfig().set("global-votes", globalVotes);
         plugin.saveConfig();
 
+        // 1. Regular Vote Processing (NuVotifier)
         String guardian = identifyGuardian(serviceName);
-        factionVotes.put(guardian, factionVotes.getOrDefault(guardian, 0) + 1);
+
+        // Only count towards faction if NOT in event mode (Event mode uses manual voting)
+        if (!isEventActive) {
+            factionVotes.put(guardian, factionVotes.getOrDefault(guardian, 0) + 1);
+        }
 
         if (plugin.getBossBarManager() != null) {
             plugin.getBossBarManager().updateBar(globalVotes, VOTES_FOR_PARTY);
@@ -67,6 +71,29 @@ public class VoteManager {
         }
     }
 
+    // --- NEW: Handle Internal Click Vote (The Mini-Game) ---
+    public void handleInternalVote(Player player, String faction) {
+        if (!isEventActive) {
+            player.sendMessage(ChatColor.RED + "The stars are not currently aligning.");
+            return;
+        }
+        if (hasVotedInEvent.contains(player.getUniqueId())) {
+            player.sendMessage(ChatColor.RED + "You have already cast your vote for this alignment!");
+            return;
+        }
+
+        // Register Vote
+        hasVotedInEvent.add(player.getUniqueId());
+        factionVotes.put(faction, factionVotes.getOrDefault(faction, 0) + 1);
+
+        // Feedback
+        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
+        player.sendMessage(ChatColor.GREEN + "You voted for " + capitalize(faction) + "!");
+
+        // Update Chat for Everyone
+        broadcastVoteStatus();
+    }
+
     private void startAstralAlignment() {
         globalVotes = 0;
         plugin.getConfig().set("global-votes", 0);
@@ -74,6 +101,10 @@ public class VoteManager {
         if (plugin.getBossBarManager() != null) plugin.getBossBarManager().updateBar(0, VOTES_FOR_PARTY);
 
         isChatMuted = true;
+        isEventActive = true;
+        hasVotedInEvent.clear();
+        resetFactions(); // Start fresh for the mini-game
+
         Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.chat-muted")));
 
         plugin.getMeteorManager().startSequence();
@@ -81,7 +112,7 @@ public class VoteManager {
         new BukkitRunnable() {
             @Override
             public void run() {
-                sendVoteStatusMenu();
+                broadcastVoteStatus();
             }
         }.runTaskLater(plugin, 40L);
 
@@ -90,21 +121,21 @@ public class VoteManager {
             public void run() {
                 endParty();
             }
-        }.runTaskLater(plugin, 320L);
+        }.runTaskLater(plugin, 320L); // 16 seconds
     }
 
-    private void sendVoteStatusMenu() {
+    private void broadcastVoteStatus() {
+        // Clear chat slightly to make it look like a "Live Dashboard"
         for (Player p : Bukkit.getOnlinePlayers()) {
+            p.sendMessage(""); // Spacer
+            p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&6&l★ ASTRAL ALIGNMENT VOTING ★"));
+            p.sendMessage(ChatColor.GRAY + "Click below to choose the Faction Blessing!");
             p.sendMessage("");
-            p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&6&l★ THE STARS ARE ALIGNING! ★"));
-            p.sendMessage(ChatColor.GRAY + "The guardians are fighting for dominance...");
-            p.sendMessage("");
+
             sendGuardianLine(p, "ignis", "&c🔥 Ignis", ChatColor.RED);
             sendGuardianLine(p, "cryo", "&b❄️ Cryo", ChatColor.AQUA);
             sendGuardianLine(p, "terra", "&a🌿 Terra", ChatColor.GREEN);
             sendGuardianLine(p, "aether", "&d🔮 Aether", ChatColor.LIGHT_PURPLE);
-            p.sendMessage("");
-            p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&e&lCLICK TO VOTE &7to change the fate!"));
             p.sendMessage("");
         }
     }
@@ -112,16 +143,16 @@ public class VoteManager {
     private void sendGuardianLine(Player p, String id, String displayName, ChatColor color) {
         int votes = factionVotes.getOrDefault(id, 0);
         String power = plugin.getConfig().getString("blessings." + id + ".description", "Unknown Power");
-        String link = plugin.getConfig().getString("links." + id, "https://example.com");
 
         TextComponent message = new TextComponent(ChatColor.translateAlternateColorCodes('&',
                 displayName + " &8[" + color + power + "&8] &7- &f" + votes + " Votes "));
 
-        TextComponent button = new TextComponent("[VOTE]");
+        TextComponent button = new TextComponent("[CLICK TO VOTE]");
         button.setColor(net.md_5.bungee.api.ChatColor.GOLD);
         button.setBold(true);
-        button.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, link));
-        button.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder("Click to vote for " + displayName).create()));
+        // Uses a RUN_COMMAND to trigger the internal vote method
+        button.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/rfvote internalvote " + id));
+        button.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder("Click to support " + displayName).create()));
 
         message.addExtra(button);
         p.spigot().sendMessage(message);
@@ -129,28 +160,55 @@ public class VoteManager {
 
     private void endParty() {
         isChatMuted = false;
+        isEventActive = false;
         Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("messages.chat-unmuted")));
 
         String winner = getWinningFaction();
         applyBlessing(winner);
 
-        // --- NEW GEODE LOGIC ---
         Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', "&6&lTHE STARS HAVE LANDED! &e&lHARVEST THE GEODES QUICKLY!"));
         plugin.getGeodeManager().spawnGeodes(winner);
+
+        // Give Party Rewards (Keys/Money)
+        ConsoleCommandSender console = Bukkit.getConsoleSender();
+        List<String> partyCmds = plugin.getConfig().getStringList("rewards.party");
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.5f, 0.8f);
+            for (String cmd : partyCmds) {
+                Bukkit.dispatchCommand(console, cmd.replace("%player%", p.getName()));
+            }
+        }
 
         resetFactions();
     }
 
     private String getWinningFaction() {
-        String winner = "aether";
+        // Collect winners
+        List<String> candidates = new ArrayList<>();
         int max = -1;
+
+        // Find max
         for (Map.Entry<String, Integer> entry : factionVotes.entrySet()) {
             if (entry.getValue() > max) {
                 max = entry.getValue();
-                winner = entry.getKey();
             }
         }
-        return winner;
+
+        // Add all with max score to list
+        for (Map.Entry<String, Integer> entry : factionVotes.entrySet()) {
+            if (entry.getValue() == max) {
+                candidates.add(entry.getKey());
+            }
+        }
+
+        // If no votes (max is 0) or tie, pick random from list
+        if (candidates.isEmpty()) {
+            // Absolute fallback if map is empty
+            List<String> all = Arrays.asList("ignis", "cryo", "terra", "aether");
+            return all.get(random.nextInt(all.size()));
+        }
+
+        return candidates.get(random.nextInt(candidates.size()));
     }
 
     private void applyBlessing(String faction) {

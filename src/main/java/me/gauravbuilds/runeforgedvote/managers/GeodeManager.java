@@ -12,9 +12,9 @@ import java.util.*;
 public class GeodeManager {
 
     private final RuneForgedVote plugin;
-    private final Map<Location, Material> originalBlocks = new HashMap<>();
-    private final Set<Location> activeCores = new HashSet<>();
-    private final Set<Location> activeCrust = new HashSet<>();
+    // We use String keys "world,x,y,z" for 100% accurate tracking to avoid decimal errors
+    private final Map<String, Material> originalBlocks = new HashMap<>();
+    private final Set<String> activeCores = new HashSet<>();
     private final List<Location> geodeSpawnPoints = new ArrayList<>();
 
     public GeodeManager(RuneForgedVote plugin) {
@@ -29,7 +29,7 @@ public class GeodeManager {
 
         if (section != null) {
             for (String key : section.getKeys(false)) {
-                if (key.startsWith("geode-")) { // LOOK FOR GEODE KEY
+                if (key.startsWith("geode-")) {
                     String path = "locations." + key;
                     if (config.contains(path + ".world")) {
                         World w = Bukkit.getWorld(config.getString(path + ".world"));
@@ -37,7 +37,8 @@ public class GeodeManager {
                         double y = config.getDouble(path + ".y");
                         double z = config.getDouble(path + ".z");
                         if (w != null) {
-                            geodeSpawnPoints.add(new Location(w, x, y, z));
+                            // We immediately align to block coordinates
+                            geodeSpawnPoints.add(new Location(w, (int)x, (int)y, (int)z));
                         }
                     }
                 }
@@ -47,43 +48,36 @@ public class GeodeManager {
     }
 
     public void spawnGeodes(String winner) {
-        // Fallback: If no geodes set, try using meteors
         if (geodeSpawnPoints.isEmpty()) {
-            plugin.getLogger().warning("No 'geode' locations set. Using 'meteor' locations as fallback.");
-            // (Logic to copy meteor locs if needed, or just return)
+            return;
         }
 
         Material coreType;
-        Material crustType;
         Particle particle;
 
         switch (winner.toLowerCase()) {
             case "ignis": // Fire
                 coreType = Material.MAGMA_BLOCK;
-                crustType = Material.BLACKSTONE;
                 particle = Particle.FLAME;
                 break;
             case "cryo": // Ice
                 coreType = Material.BLUE_ICE;
-                crustType = Material.PACKED_ICE;
                 particle = Particle.SNOWFLAKE;
                 break;
             case "terra": // Nature
                 coreType = Material.EMERALD_ORE;
-                crustType = Material.MOSSY_COBBLESTONE;
                 particle = Particle.HAPPY_VILLAGER;
                 break;
             default: // Aether
                 coreType = Material.AMETHYST_BLOCK;
-                crustType = Material.CRYING_OBSIDIAN;
                 particle = Particle.DRAGON_BREATH;
                 break;
         }
 
         for (Location loc : geodeSpawnPoints) {
-            // OFFSET FIX: Spawn 1 block UP so we don't destroy the floor
+            // Spawn 1 block UP so we don't destroy the floor
             Location spawnLoc = loc.clone().add(0, 1, 0);
-            generateGeodeStructure(spawnLoc, coreType, crustType);
+            generateSingleGeode(spawnLoc, coreType);
         }
 
         // Decay Timer (30s)
@@ -96,10 +90,15 @@ public class GeodeManager {
                     this.cancel();
                     return;
                 }
-                for (Location loc : activeCores) {
-                    loc.getWorld().spawnParticle(particle, loc.clone().add(0.5, 0.5, 0.5), 5, 0.5, 0.5, 0.5, 0.1);
-                    if (seconds <= 5) {
-                        loc.getWorld().spawnParticle(Particle.LARGE_SMOKE, loc.clone().add(0.5, 1, 0.5), 2, 0, 0, 0, 0.05);
+
+                // Visuals on active blocks
+                for (String locKey : activeCores) {
+                    Location loc = parseKey(locKey);
+                    if (loc != null) {
+                        loc.getWorld().spawnParticle(particle, loc.clone().add(0.5, 0.5, 0.5), 5, 0.5, 0.5, 0.5, 0.1);
+                        if (seconds <= 5) {
+                            loc.getWorld().spawnParticle(Particle.LARGE_SMOKE, loc.clone().add(0.5, 1, 0.5), 2, 0, 0, 0, 0.05);
+                        }
                     }
                 }
                 seconds--;
@@ -107,65 +106,67 @@ public class GeodeManager {
         }.runTaskTimer(plugin, 0L, 20L);
     }
 
-    private void generateGeodeStructure(Location center, Material core, Material crust) {
-        for (int x = -1; x <= 1; x++) {
-            for (int y = -1; y <= 1; y++) {
-                for (int z = -1; z <= 1; z++) {
-                    Location loc = center.clone().add(x, y, z);
-                    Block block = loc.getBlock();
+    private void generateSingleGeode(Location center, Material core) {
+        Block block = center.getBlock();
+        String key = getKey(center);
 
-                    if (block.getType() == Material.AIR && y > 0) continue; // Keep shape somewhat grounded
-
-                    originalBlocks.putIfAbsent(loc, block.getType());
-
-                    if (x == 0 && y == 0 && z == 0) {
-                        block.setType(core);
-                        activeCores.add(loc);
-                    } else {
-                        block.setType(crust);
-                        activeCrust.add(loc);
-                    }
-                }
-            }
+        // Store original (likely AIR)
+        if (!originalBlocks.containsKey(key)) {
+            originalBlocks.put(key, block.getType());
         }
-        center.getWorld().playSound(center, Sound.BLOCK_GLASS_BREAK, 2f, 0.5f);
+
+        // Set to Core
+        block.setType(core);
+        activeCores.add(key);
+
+        // Sound
+        center.getWorld().playSound(center, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 2f, 0.5f);
     }
 
-    public boolean isGeodeCore(Location loc) { return activeCores.contains(loc); }
-    public boolean isGeodeCrust(Location loc) { return activeCrust.contains(loc); }
+    // --- Helper for Block Tracking ---
+    private String getKey(Location loc) {
+        return loc.getWorld().getName() + "," + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ();
+    }
+
+    private Location parseKey(String key) {
+        try {
+            String[] parts = key.split(",");
+            World w = Bukkit.getWorld(parts[0]);
+            int x = Integer.parseInt(parts[1]);
+            int y = Integer.parseInt(parts[2]);
+            int z = Integer.parseInt(parts[3]);
+            return new Location(w, x, y, z);
+        } catch (Exception e) { return null; }
+    }
+
+    public boolean isGeodeCore(Location loc) {
+        return activeCores.contains(getKey(loc));
+    }
 
     public void removeSingleGeode(Location coreLoc) {
-        if (!activeCores.contains(coreLoc)) return;
-        activeCores.remove(coreLoc);
-        restoreBlock(coreLoc);
+        String key = getKey(coreLoc);
+        if (!activeCores.contains(key)) return;
 
-        for (int x = -1; x <= 1; x++) {
-            for (int y = -1; y <= 1; y++) {
-                for (int z = -1; z <= 1; z++) {
-                    Location loc = coreLoc.clone().add(x, y, z);
-                    if (activeCrust.contains(loc)) {
-                        activeCrust.remove(loc);
-                        restoreBlock(loc);
-                    }
-                }
-            }
-        }
+        activeCores.remove(key);
+        restoreBlock(key);
     }
 
     public void cleanupGeodes() {
-        for (Location loc : new HashSet<>(activeCores)) restoreBlock(loc);
-        for (Location loc : new HashSet<>(activeCrust)) restoreBlock(loc);
+        // Restore all remaining blocks
+        for (String key : new HashSet<>(activeCores)) {
+            restoreBlock(key);
+        }
         activeCores.clear();
-        activeCrust.clear();
         originalBlocks.clear();
         Bukkit.broadcastMessage(ChatColor.GRAY + "The astral energy dissipates...");
     }
 
-    private void restoreBlock(Location loc) {
-        if (originalBlocks.containsKey(loc)) {
-            loc.getBlock().setType(originalBlocks.get(loc));
-        } else {
-            loc.getBlock().setType(Material.AIR); // Default to AIR if unknown (Safety)
+    private void restoreBlock(String key) {
+        Location loc = parseKey(key);
+        if (loc != null && originalBlocks.containsKey(key)) {
+            loc.getBlock().setType(originalBlocks.get(key));
+        } else if (loc != null) {
+            loc.getBlock().setType(Material.AIR); // Safe default
         }
     }
 }

@@ -29,83 +29,96 @@ public class GeodeListener implements Listener {
         this.plugin = plugin;
     }
 
-    // HIGHEST PRIORITY + IGNORE CANCELLED = FALSE
-    // This allows us to UN-CANCEL the event if WorldGuard blocked it.
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBreak(BlockBreakEvent event) {
 
-        // 1. Is it a Geode Core?
         if (plugin.getGeodeManager().isGeodeCore(event.getBlock().getLocation())) {
-            // FORCE ALLOW BREAKING (Bypass protection)
+
             event.setCancelled(false);
-            event.setDropItems(false); // Don't drop raw block
+            event.setDropItems(false);
+            event.setExpToDrop(0);
 
             handleLoot(event.getPlayer(), event.getBlock().getType());
-            plugin.getGeodeManager().removeSingleGeode(event.getBlock().getLocation());
-            return;
-        }
 
-        // 2. Is it Geode Crust?
-        if (plugin.getGeodeManager().isGeodeCrust(event.getBlock().getLocation())) {
-            // FORCE ALLOW BREAKING
-            event.setCancelled(false);
-            event.setDropItems(false); // Don't drop crust
-            event.setExpToDrop(0);
+            plugin.getGeodeManager().removeSingleGeode(event.getBlock().getLocation());
         }
     }
 
     private void handleLoot(Player player, Material type) {
-        // Visuals
         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 2f);
         player.spawnParticle(Particle.TOTEM_OF_UNDYING, player.getLocation(), 20, 0.5, 0.5, 0.5, 0.2);
         player.sendMessage(ChatColor.GOLD + "★ You harvested the Star Core!");
 
-        // --- DROP CUSTOM SHARD ---
+        // 1. Drop Specific Fragment
         ItemStack shard = getCustomShard(type);
         player.getWorld().dropItemNaturally(player.getLocation(), shard);
 
-        // --- STANDARD REWARDS ---
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "rune givecatalyst " + player.getName() + " 1");
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "eco give " + player.getName() + " 500");
+        // 2. Drop Money Pouch (Random)
+        int roll = random.nextInt(100);
+        int amount = 0;
+        if (roll < 50) amount = 200; // 50%
+        else if (roll < 80) amount = 500; // 30%
+        else if (roll < 95) amount = 1000; // 15%
+        else if (roll < 99) amount = 5000; // 4%
+        else amount = 10000; // 1%
 
-        // --- RARE REWARD ---
-        if (random.nextInt(100) < 5) {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "crate give key cosmic " + player.getName() + " 1");
-            player.sendMessage(ChatColor.LIGHT_PURPLE + "You found a Cosmic Key inside!");
-        }
+        // Give money command
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "eco give " + player.getName() + " " + amount);
+        player.sendMessage(ChatColor.GREEN + "+ $" + amount);
+
+        // 3. Stardust Reward
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "rune givecatalyst " + player.getName() + " 1");
     }
 
-    private ItemStack getCustomShard(Material blockType) {
+    // PUBLIC static so we can use it in the /rfvote giveitem command
+    public static ItemStack getCustomShard(Material blockType) {
         ItemStack item;
         String name;
+        int cmd; // Custom Model Data
 
         if (blockType == Material.MAGMA_BLOCK) {
             item = new ItemStack(Material.BLAZE_POWDER);
             name = "&c&lIgnis Ember";
+            cmd = 1001;
         } else if (blockType == Material.BLUE_ICE) {
             item = new ItemStack(Material.PRISMARINE_SHARD);
             name = "&b&lCryo Fragment";
+            cmd = 1002;
         } else if (blockType == Material.EMERALD_ORE) {
             item = new ItemStack(Material.EMERALD);
             name = "&a&lTerra Cluster";
+            cmd = 1003;
         } else {
+            // Default Aether
             item = new ItemStack(Material.AMETHYST_SHARD);
             name = "&d&lAether Shard";
+            cmd = 1004;
         }
 
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', name));
+        meta.setCustomModelData(cmd);
 
         List<String> lore = new ArrayList<>();
         lore.add(ChatColor.GRAY + "Forged from the fallen stars.");
         lore.add(ChatColor.GRAY + "Contains pure astral energy.");
+        lore.add("");
+        lore.add(ChatColor.YELLOW + "Right-click to view recipes!"); // Placeholder for later
         meta.setLore(lore);
 
-        // GLINT EFFECT (Unbreaking 1 + Hide Flags)
         meta.addEnchant(Enchantment.UNBREAKING, 1, true);
         meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
 
         item.setItemMeta(meta);
         return item;
+    }
+
+    // Helper for command
+    public static ItemStack getShardByName(String name) {
+        if (name.equalsIgnoreCase("ignis")) return getCustomShard(Material.MAGMA_BLOCK);
+        if (name.equalsIgnoreCase("cryo")) return getCustomShard(Material.BLUE_ICE);
+        if (name.equalsIgnoreCase("terra")) return getCustomShard(Material.EMERALD_ORE);
+        return getCustomShard(Material.AMETHYST_BLOCK);
     }
 }
