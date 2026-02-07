@@ -1,19 +1,24 @@
 package me.gauravbuilds.runeforgedvote;
 
+import me.gauravbuilds.runeforgedvote.items.combat.*;
+import me.gauravbuilds.runeforgedvote.items.mining.*;
 import me.gauravbuilds.runeforgedvote.listeners.ChatListener;
 import me.gauravbuilds.runeforgedvote.listeners.GeodeListener;
 import me.gauravbuilds.runeforgedvote.listeners.VoteListener;
 import me.gauravbuilds.runeforgedvote.listeners.NpcListener;
+import me.gauravbuilds.runeforgedvote.items.farming.*;
+import me.gauravbuilds.runeforgedvote.listeners.RecipeProtectionListener; // New Import
 import me.gauravbuilds.runeforgedvote.managers.BossBarManager;
 import me.gauravbuilds.runeforgedvote.managers.CrystalManager;
 import me.gauravbuilds.runeforgedvote.managers.GeodeManager;
 import me.gauravbuilds.runeforgedvote.managers.MeteorManager;
 import me.gauravbuilds.runeforgedvote.managers.PillarManager;
+import me.gauravbuilds.runeforgedvote.items.travel.*;
 import me.gauravbuilds.runeforgedvote.managers.VoteManager;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.TextComponent;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.command.Command;
@@ -44,6 +49,7 @@ public class RuneForgedVote extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
 
+        // 1. Initialize Managers
         this.pillarManager = new PillarManager(this);
         this.meteorManager = new MeteorManager(this);
         this.bossBarManager = new BossBarManager(this);
@@ -51,15 +57,67 @@ public class RuneForgedVote extends JavaPlugin {
         this.voteManager = new VoteManager(this);
         this.crystalManager = new CrystalManager(this);
 
+        // 2. Register Events
         getServer().getPluginManager().registerEvents(new VoteListener(this), this);
         getServer().getPluginManager().registerEvents(new NpcListener(this), this);
         getServer().getPluginManager().registerEvents(bossBarManager, this);
         getServer().getPluginManager().registerEvents(new ChatListener(this), this);
         getServer().getPluginManager().registerEvents(new GeodeListener(this), this);
-        getServer().getPluginManager().registerEvents(new me.gauravbuilds.runeforgedvote.listeners.RecipeProtectionListener(), this);
+        // Register the Recipe Protection (Anti-Crafting for Custom Items)
+        getServer().getPluginManager().registerEvents(new RecipeProtectionListener(), this);
 
+        // Mining Custom Items
+        new IgnisPickaxe(this).register();
+        new TerraDrill(this).register();
+        new SeismicHammer(this).register();
+        new VeinBreaker(this).register();
+        new ObsidianEater(this).register();
+        new AetherMagnet(this).register();
+        new BoreBomb(this).register();
+        new CaveFinder(this).register();
+        new BedrockBreaker(this).register();
+        new LightStepBoots(this).register();
+
+        // Combat Custom Items
+        new IgnisBlade(this).register();
+        new CryoBow(this).register();
+        new VampireDagger(this).register();
+        new TerraShield(this).register();
+        new GuardianChestplate(this).register();
+        new Flashbang(this).register();
+        new Molotov(this).register();
+        new IceWall(this).register();
+        new EscapeTotem(this).register();
+        new ExecutionerAxe(this).register();
+
+        // Farming Items
+        new DruidsHoe(this).register();
+        new ShearsOfPlenty(this).register();
+        new HarvesterScythe(this).register();
+        new LumberjackAxe(this).register();
+        new HydraCan(this).register();
+        new GrowthDust(this).register();
+        new MobNet(this).register();
+        new SunStone(this).register();
+        new BreedingCandy(this).register();
+        new GreenhouseGlass(this).register();
+
+        // Travelling Custom Items
+        new AetherStriders(this).register();
+        new MagmaWaders(this).register();
+        new BlinkStaff(this).register();
+        new GrapplingHook(this).register();
+        new GliderWings(this).register();
+        new RecallScroll(this).register();
+        new LaunchPad(this).register();
+        new PocketHorse(this).register();
+        new VoidPearl(this).register();
+        new DolphinCharm(this).register();
+
+        // 3. Start Visuals
         crystalManager.startAnimation();
 
+        // 4. Register Commands
         if (getCommand("rfvote") != null) {
             getCommand("rfvote").setExecutor(this);
             getCommand("rfvote").setTabCompleter(this);
@@ -75,6 +133,7 @@ public class RuneForgedVote extends JavaPlugin {
         if (geodeManager != null) geodeManager.cleanupGeodes();
     }
 
+    // Getters
     public VoteManager getVoteManager() { return voteManager; }
     public CrystalManager getCrystalManager() { return crystalManager; }
     public PillarManager getPillarManager() { return pillarManager; }
@@ -82,11 +141,13 @@ public class RuneForgedVote extends JavaPlugin {
     public MeteorManager getMeteorManager() { return meteorManager; }
     public GeodeManager getGeodeManager() { return geodeManager; }
 
+    // ==========================================
+    //              COMMAND LOGIC
+    // ==========================================
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
 
-        // HIDDEN COMMAND FOR CHAT CLICK VOTING
-        // Anyone can run this, but VoteManager handles checks (if event is active, if voted already)
+        // HIDDEN COMMAND: Internal Voting Logic (Used by Chat Clicks)
         if (args.length >= 2 && args[0].equalsIgnoreCase("internalvote")) {
             if (!(sender instanceof Player)) return true;
             String faction = args[1];
@@ -94,7 +155,7 @@ public class RuneForgedVote extends JavaPlugin {
             return true;
         }
 
-        // ADMIN COMMANDS BELOW
+        // ADMIN CHECK
         if (!sender.hasPermission("rfvote.admin")) {
             sender.sendMessage(ChatColor.RED + "Only the Oracle can use this.");
             return true;
@@ -114,7 +175,7 @@ public class RuneForgedVote extends JavaPlugin {
 
         String sub = args[0].toLowerCase();
 
-        // GIVE ITEM
+        // 1. GIVE ITEM (Custom Shards)
         if (sub.equals("giveitem")) {
             if (args.length < 3) {
                 sender.sendMessage(ChatColor.RED + "Usage: /rfvote giveitem <player> <ignis/cryo/terra/aether> <amount>");
@@ -131,6 +192,7 @@ public class RuneForgedVote extends JavaPlugin {
                 try { amount = Integer.parseInt(args[3]); } catch (Exception ignored) {}
             }
 
+            // Get the custom item with NBT/Model Data
             ItemStack item = GeodeListener.getShardByName(itemType);
             item.setAmount(amount);
             target.getInventory().addItem(item);
@@ -138,7 +200,7 @@ public class RuneForgedVote extends JavaPlugin {
             return true;
         }
 
-        // OTHER COMMANDS (Unchanged)
+        // 2. RELOAD
         if (sub.equals("reload")) {
             reloadConfig();
             meteorManager.loadLocations();
@@ -146,12 +208,16 @@ public class RuneForgedVote extends JavaPlugin {
             sender.sendMessage(ChatColor.GREEN + "Config reloaded.");
             return true;
         }
+
+        // 3. SET ALTAR
         if (sub.equals("setaltar")) {
             if (!(sender instanceof Player)) return true;
             saveLocation("locations.altar", ((Player) sender).getLocation());
             sender.sendMessage(ChatColor.GREEN + "Altar location set!");
             return true;
         }
+
+        // 4. SET METEOR (Visuals)
         if (sub.equals("setmeteor")) {
             if (!(sender instanceof Player)) return true;
             if (args.length < 2) return true;
@@ -160,9 +226,13 @@ public class RuneForgedVote extends JavaPlugin {
                 saveLocation("locations.meteor-" + id, ((Player) sender).getLocation());
                 sender.sendMessage(ChatColor.GREEN + "Meteor Visual Zone #" + id + " set!");
                 meteorManager.loadLocations();
-            } catch (Exception e) {}
+            } catch (Exception e) {
+                sender.sendMessage(ChatColor.RED + "Invalid number.");
+            }
             return true;
         }
+
+        // 5. SET GEODE (Mining Spots)
         if (sub.equals("setgeode")) {
             if (!(sender instanceof Player)) return true;
             if (args.length < 2) return true;
@@ -171,9 +241,13 @@ public class RuneForgedVote extends JavaPlugin {
                 saveLocation("locations.geode-" + id, ((Player) sender).getLocation());
                 sender.sendMessage(ChatColor.GREEN + "Geode Mining Spot #" + id + " set!");
                 geodeManager.loadGeodeLocations();
-            } catch (Exception e) {}
+            } catch (Exception e) {
+                sender.sendMessage(ChatColor.RED + "Invalid number.");
+            }
             return true;
         }
+
+        // 6. SET PILLAR
         if (sub.equals("setpillar")) {
             if (!(sender instanceof Player)) return true;
             if (args.length < 2) return true;
@@ -182,6 +256,8 @@ public class RuneForgedVote extends JavaPlugin {
             sender.sendMessage(ChatColor.GREEN + "Pillar '" + name + "' set!");
             return true;
         }
+
+        // 7. INTERACT (NPCs)
         if (sub.equals("interact")) {
             if (args.length < 3) return true;
             Player target = Bukkit.getPlayer(args[1]);
@@ -189,6 +265,8 @@ public class RuneForgedVote extends JavaPlugin {
             if (target != null) handleNpcInteraction(target, guardianName);
             return true;
         }
+
+        // 8. FAKEVOTE (Testing)
         if (sub.equals("fakevote")) {
             String pName = (args.length > 1) ? args[1] : "TestPlayer";
             int amount = 1;
@@ -202,6 +280,9 @@ public class RuneForgedVote extends JavaPlugin {
         return true;
     }
 
+    // ==========================================
+    //            TAB COMPLETION LOGIC
+    // ==========================================
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
         if (!sender.hasPermission("rfvote.admin")) return Collections.emptyList();
@@ -217,10 +298,9 @@ public class RuneForgedVote extends JavaPlugin {
 
         String sub = args[0].toLowerCase();
 
+        // Special Tab Complete for giveitem
         if (sub.equals("giveitem")) {
-            if (args.length == 2) {
-                return null; // Player list
-            }
+            if (args.length == 2) return null; // Player list
             if (args.length == 3) {
                 suggestions.addAll(Arrays.asList("ignis", "cryo", "terra", "aether"));
                 StringUtil.copyPartialMatches(args[2], suggestions, completions);
@@ -233,25 +313,28 @@ public class RuneForgedVote extends JavaPlugin {
             }
         }
 
-        // ... existing tab logic for setpillar/etc ...
         if (args.length == 2) {
             if (sub.equals("setpillar")) suggestions.addAll(Arrays.asList("ignis", "cryo", "terra", "aether"));
             else if (sub.equals("setmeteor") || sub.equals("setgeode")) {
                 for (int i = 1; i <= 20; i++) suggestions.add(String.valueOf(i));
             }
+            else if (sub.equals("interact") || sub.equals("fakevote")) return null;
             StringUtil.copyPartialMatches(args[1], suggestions, completions);
             Collections.sort(completions);
             return completions;
         }
 
+        if (args.length == 3) {
+            if (sub.equals("interact")) suggestions.addAll(Arrays.asList("ignis", "cryo", "terra", "aether"));
+            else if (sub.equals("fakevote")) suggestions.addAll(Arrays.asList("1", "2", "4", "8", "16", "32", "64"));
+            StringUtil.copyPartialMatches(args[2], suggestions, completions);
+            Collections.sort(completions);
+            return completions;
+        }
         return Collections.emptyList();
     }
 
-    // Helper Methods (NpcInteraction, SaveLocation) remain same
     private void handleNpcInteraction(Player player, String guardianName) {
-        // ... Same as before ...
-        // Just copy the method from previous file if you are replacing whole file, or keep it if partial
-        // For completeness I assume you know to keep the helper methods
         boolean demoMode = getConfig().getBoolean("demo-mode", true);
         if (demoMode) {
             long lastVote = getConfig().getLong("data." + player.getUniqueId() + "." + guardianName, 0);

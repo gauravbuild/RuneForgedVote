@@ -31,15 +31,12 @@ public class GeodeListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBreak(BlockBreakEvent event) {
-
         if (plugin.getGeodeManager().isGeodeCore(event.getBlock().getLocation())) {
-
             event.setCancelled(false);
             event.setDropItems(false);
             event.setExpToDrop(0);
 
             handleLoot(event.getPlayer(), event.getBlock().getType());
-
             plugin.getGeodeManager().removeSingleGeode(event.getBlock().getLocation());
         }
     }
@@ -62,7 +59,6 @@ public class GeodeListener implements Listener {
         else if (roll < 99) amount = 5000; // 4%
         else amount = 10000; // 1%
 
-        // Give money command
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "eco give " + player.getName() + " " + amount);
         player.sendMessage(ChatColor.GREEN + "+ $" + amount);
 
@@ -70,51 +66,48 @@ public class GeodeListener implements Listener {
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "rune givecatalyst " + player.getName() + " 1");
     }
 
-    // PUBLIC static so we can use it in the /rfvote giveitem command
+    // PUBLIC static so other classes can use it
     public static ItemStack getCustomShard(Material blockType) {
         ItemStack item;
         String name;
-        int cmd; // Custom Model Data
+        int cmd; // <--- THIS IS THE MISSING KEY
 
         if (blockType == Material.MAGMA_BLOCK) {
             item = new ItemStack(Material.BLAZE_POWDER);
             name = "&c&lIgnis Ember";
-            cmd = 1001;
+            cmd = 1001; // ID for Ignis
         } else if (blockType == Material.BLUE_ICE) {
             item = new ItemStack(Material.PRISMARINE_SHARD);
             name = "&b&lCryo Fragment";
-            cmd = 1002;
+            cmd = 1002; // ID for Cryo
         } else if (blockType == Material.EMERALD_ORE) {
             item = new ItemStack(Material.EMERALD);
             name = "&a&lTerra Cluster";
-            cmd = 1003;
+            cmd = 1003; // ID for Terra
         } else {
-            // Default Aether
             item = new ItemStack(Material.AMETHYST_SHARD);
             name = "&d&lAether Shard";
-            cmd = 1004;
+            cmd = 1004; // ID for Aether
         }
 
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', name));
+
+        // --- VITAL: Set the ID so we can protect it ---
         meta.setCustomModelData(cmd);
 
         List<String> lore = new ArrayList<>();
         lore.add(ChatColor.GRAY + "Forged from the fallen stars.");
         lore.add(ChatColor.GRAY + "Contains pure astral energy.");
-        lore.add("");
-        lore.add(ChatColor.YELLOW + "Right-click to view recipes!"); // Placeholder for later
         meta.setLore(lore);
 
         meta.addEnchant(Enchantment.UNBREAKING, 1, true);
         meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
-        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
-
         item.setItemMeta(meta);
+
         return item;
     }
 
-    // Helper for command
     public static ItemStack getShardByName(String name) {
         if (name.equalsIgnoreCase("ignis")) return getCustomShard(Material.MAGMA_BLOCK);
         if (name.equalsIgnoreCase("cryo")) return getCustomShard(Material.BLUE_ICE);

@@ -12,48 +12,57 @@ import org.bukkit.inventory.meta.ItemMeta;
 
 public class RecipeProtectionListener implements Listener {
 
-    // The Custom Model Data IDs we assigned in GeodeListener
     private final int ID_IGNIS = 1001;
     private final int ID_CRYO = 1002;
     private final int ID_TERRA = 1003;
     private final int ID_AETHER = 1004;
 
-    /**
-     * Prevents using Custom Shards in Vanilla Crafting Recipes.
-     * Example: Prevents Ignis Ember (Blaze Powder) -> Ender Eye
-     */
     @EventHandler
     public void onPrepareCraft(PrepareItemCraftEvent event) {
+        boolean hasShards = false;
+        boolean hasArtifactInput = false;
+
+        // 1. Scan the crafting grid (Matrix)
         for (ItemStack item : event.getInventory().getMatrix()) {
+            if (item == null || item.getType() == Material.AIR) continue;
+
             if (isCustomShard(item)) {
-                // If we find a custom shard in the grid, BLOCK the result.
-                // (Later, we will add an exception here for our own custom recipes)
+                hasShards = true;
+            }
+            // CHECK: Is the player trying to use an existing Artifact as an ingredient?
+            if (isRuneForgedArtifact(item)) {
+                hasArtifactInput = true;
+            }
+        }
+
+        // RULE 1: Never allow an existing Artifact to be used as an ingredient.
+        // (Prevents crafting an Ignis Pickaxe using an existing Ignis Pickaxe)
+        if (hasArtifactInput) {
+            event.getInventory().setResult(null);
+            return;
+        }
+
+        // RULE 2: If using Shards, the result MUST be a valid RuneForged Artifact.
+        // (Prevents using Shards for vanilla recipes like Eye of Ender)
+        if (hasShards) {
+            ItemStack result = event.getInventory().getResult();
+            if (result == null || !isRuneForgedArtifact(result)) {
                 event.getInventory().setResult(null);
-                return;
             }
         }
     }
 
-    /**
-     * Prevents placing Custom Shards into Brewing Stands.
-     * Example: Prevents Ignis Ember as Fuel or Ingredient.
-     */
     @EventHandler
     public void onBrewingStandClick(InventoryClickEvent event) {
         if (event.getClickedInventory() == null) return;
-
-        // Only care if interacting with a Brewing Stand
         if (event.getInventory().getType() != InventoryType.BREWING) return;
 
-        // Check if the item being moved/clicked is one of ours
         ItemStack cursor = event.getCursor();
         ItemStack current = event.getCurrentItem();
 
-        // Block placing OUR item into the stand
         if (isCustomShard(cursor) || isCustomShard(current)) {
-            // Allow moving it back to player inventory, but BLOCK moving it into the stand slots
             if (event.getSlotType() == InventoryType.SlotType.FUEL ||
-                    event.getSlotType() == InventoryType.SlotType.CRAFTING) { // 'Crafting' is the bottle/ingredient slot in brewing
+                    event.getSlotType() == InventoryType.SlotType.CRAFTING) {
 
                 event.setCancelled(true);
                 event.getWhoClicked().sendMessage(ChatColor.RED + "The energy of this artifact is too unstable for alchemy!");
@@ -61,17 +70,21 @@ public class RecipeProtectionListener implements Listener {
         }
     }
 
-    /**
-     * Helper to check if an item is one of our RuneForged Shards
-     */
     private boolean isCustomShard(ItemStack item) {
         if (item == null || item.getType() == Material.AIR) return false;
         if (!item.hasItemMeta()) return false;
+        if (!item.getItemMeta().hasCustomModelData()) return false;
 
-        ItemMeta meta = item.getItemMeta();
-        if (!meta.hasCustomModelData()) return false;
+        int data = item.getItemMeta().getCustomModelData();
+        return data >= 1001 && data <= 1004;
+    }
 
-        int data = meta.getCustomModelData();
-        return data == ID_IGNIS || data == ID_CRYO || data == ID_TERRA || data == ID_AETHER;
+    private boolean isRuneForgedArtifact(ItemStack item) {
+        if (item == null || item.getType() == Material.AIR) return false;
+        if (!item.hasItemMeta()) return false;
+        if (!item.getItemMeta().hasCustomModelData()) return false;
+
+        // Items start at 2001 (Ignis Pickaxe)
+        return item.getItemMeta().getCustomModelData() >= 2000;
     }
 }
