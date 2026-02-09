@@ -3,9 +3,11 @@ version: '${project.version}'
 main: me.gauravbuilds.runeforgedvote.RuneForgedVote
 api-version: '1.21'
 authors: [ GauravBuilds ]
-depend: [Votifier]
+depend:
+  - Votifier
+  - PlaceholderAPI
 description: Amazing Voting plugin for RuneForged Survival by GauravBuilds legend.
-website: https://gaurav-builds.netlify.app/
+website: https://zvortexlabs.netlify.app/
 
 commands:
   rfvote:

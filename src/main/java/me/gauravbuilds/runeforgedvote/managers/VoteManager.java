@@ -34,7 +34,23 @@ public class VoteManager {
         resetFactions();
     }
 
+    public int getTotalVotes(UUID uuid) {
+        return plugin.getConfig().getInt("stats." + uuid + ".total-votes", 0);
+    }
+
+    private void incrementTotalVotes(UUID uuid) {
+        int current = getTotalVotes(uuid);
+        plugin.getConfig().set("stats." + uuid + ".total-votes", current + 1);
+        plugin.saveConfig();
+    }
+
     public void handleVote(String playerName, String serviceName) {
+        // --- UPDATE: Track Total Votes for Leaderboard ---
+        // We use OfflinePlayer because the player might not be online when voting
+        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
+        incrementTotalVotes(offlinePlayer.getUniqueId());
+        // -------------------------------------------------
+
         globalVotes++;
         plugin.getConfig().set("global-votes", globalVotes);
         plugin.saveConfig();

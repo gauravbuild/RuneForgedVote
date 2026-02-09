@@ -123,6 +123,15 @@ public class RuneForgedVote extends JavaPlugin {
             getCommand("rfvote").setTabCompleter(this);
         }
 
+        // 5. Register PlaceholderAPI
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            // We use the full package name here just in case imports are tricky
+            new me.gauravbuilds.runeforgedvote.hooks.RuneForgedPlaceholder(this).register();
+            getLogger().info("PlaceholderAPI hooked! %runeforgedvote_total% is ready.");
+        } else {
+            getLogger().warning("PlaceholderAPI not found! Voting placeholders will not work.");
+        }
+
         getLogger().info("The Oracle is listening for stars...");
     }
 
